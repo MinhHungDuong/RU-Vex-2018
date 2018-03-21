@@ -49,7 +49,8 @@ float forkIntegral = 0;
 float fork_Integral_Active_Range = 100;
 float fork_maxRange = 1;
 float forkScale = (127/abs(fork_maxRange));
-
+float forkUp = 1000; //pretty much the max range
+float forkDown = 0; // the starting position, assuming robot start with fork down
 
 void initialize(){
 	slaveMotor(armLift_Right, armLift_Left); // armLift_Left is master
@@ -70,11 +71,17 @@ void initialize_Gyro(){
 	wait1Msec(2000);
 }
 
+void clearEncoder(){
+	nMotorEncoder(leftDrive) = 0;
+	nMotorEncoder(rightDrive) = 0;
+	wait1Msec(100);
+	clearTimer(T1);
+}
 
 // direction is either 1 (forward) or -1 (backward)
 // tile_Distance is distance in term of tile
 void drive (int direction, float tile_Distance){
-	initialize();
+	clearEncoder();
 	float target_Distance = direction * tile_Distance * distance_per_tile;
 
 	// DRIVE PID VARIABLES
@@ -97,7 +104,7 @@ void drive (int direction, float tile_Distance){
 	float drift_Integral_Active_Range = 50; // within 5 degree
 
 	// PID LOOP
-	while (driveError != 0){
+	while ((time1[T1] < 4000) && (abs(driveError) < 50)){
 
 		// DRIVE PID CALCULATIONS
 		driveValue = nMotorEncoder(leftDrive);
@@ -125,8 +132,8 @@ void drive (int direction, float tile_Distance){
 		drift_Power = (kP_driftCorrection *  drift_Error) + (kI_driftCorrection * drift_Integral) + (kD_driftCorrection * drift_Derivative);
 
 		// OUTPUT
-		motor[leftDrive] = (power * scaling) + (drift_Power * drift_Scaling); // if drift_Power is negative => drift right => boost right, lower left
-		motor[rightDrive] = (power * scaling) - (drift_Power * drift_Scaling); // if drift_Power is positive => drift left => boost left, lower right
+		motor[leftDrive] = (drivePower * scaling) + (drift_Power * drift_Scaling); // if drift_Power is negative => drift right => boost right, lower left
+		motor[rightDrive] = (drivePower * scaling) - (drift_Power * drift_Scaling); // if drift_Power is positive => drift left => boost left, lower right
 
 		pastError = driveError;
 		drift_Past_Error = drift_Error;
@@ -147,8 +154,8 @@ void rotate (int direction, float angle){
 	float gyro_Integral = 0;
 	float gyro_Integral_Active_Range = 100; // within 10 degree
 	float gyro_Scaling = (127/3600);
-
-	while (gyro_Error != 0){
+	clearTimer(T1);
+	while ((time1[T1] < 4000) && (abs(gyro_Error) < 50)){ //5 degree
 		gyroValue = SensorValue(gyro) - startAngle;
 		gyro_Error = gyro_Target - gyroValue;
 		gyro_Derivative = gyro_Error - gyro_Past_Error;
@@ -171,10 +178,9 @@ void rotate (int direction, float angle){
 
 
 task arm(){
-	initialize();
 	armError = armTarget - nMotorEncoder(armLift_Left);
-
-	while (armError != 0){
+	clearTimer(T2);
+	while ((time1[T2]<4000) && (abs(armError) < 50)){
 		armError = armTarget - nMotorEncoder(armLift_Left);
 		armDerivative = armError - arm_Pasr_Error;
 		armIntegral = armIntegral + armError;
@@ -193,10 +199,9 @@ task arm(){
 
 
 task fork(){
-	initialize();
 	forkError = forkTarget - nMotorEncoder(forkLift_Left);
-
-	while (armError != 0){
+	clearTimer(T3);
+	while ((time1[T3]<4000) && (abs(armError) < 50)){
 		forkError = forkTarget - nMotorEncoder(forkLift_Left);
 		forkDerivative = forkError - fork_Pasr_Error;
 		forkIntegral = forkIntegral + forkError;
@@ -217,7 +222,7 @@ task fork(){
 
 task main()
 {
-	initialize
+	initialize();
 	initialize_Gyro();
 
 	startTask(arm);
